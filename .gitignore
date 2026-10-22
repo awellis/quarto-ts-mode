@@ -1,0 +1,4 @@
+*.elc
+.DS_Store
+.dir-locals-2.el
+tree-sitter/

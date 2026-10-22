@@ -1,0 +1,26 @@
+---
+title: "Mixed language fixture"
+format: html
+---
+
+# R
+
+```{r}
+#| label: tbl-r
+mean(1:10)
+```
+
+# Python
+
+```{python}
+#| label: fig-python
+#| echo: false
+import matplotlib.pyplot as plt
+```
+
+# Julia
+
+```{julia}
+using DataFrames
+DataFrame(x = 1:3)
+```
