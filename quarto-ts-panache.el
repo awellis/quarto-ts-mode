@@ -50,6 +50,7 @@ This is disabled by default because document formatting can make broad edits."
   (setf (alist-get 'quarto-ts-mode eglot-server-programs)
         (copy-sequence quarto-ts-panache-server-command)))
 
+;;;###autoload
 (defun quarto-ts-panache-ensure ()
   "Start or connect Panache for the current Quarto source buffer."
   (interactive)
@@ -62,6 +63,7 @@ This is disabled by default because document formatting can make broad edits."
   (eglot-ensure)
   (message "Starting Panache for %s" (buffer-name)))
 
+;;;###autoload
 (defun quarto-ts-panache-format-buffer ()
   "Format the current Quarto document with Panache."
   (interactive)
@@ -69,6 +71,7 @@ This is disabled by default because document formatting can make broad edits."
     (user-error "Panache is not managing this Quarto buffer"))
   (eglot-format-buffer))
 
+;;;###autoload
 (defun quarto-ts-panache-code-actions ()
   "Show Panache code actions for the current Quarto document."
   (interactive)
@@ -76,6 +79,7 @@ This is disabled by default because document formatting can make broad edits."
     (user-error "Panache is not managing this Quarto buffer"))
   (call-interactively #'eglot-code-actions))
 
+;;;###autoload
 (defun quarto-ts-panache-reconnect ()
   "Reconnect the current Panache session, or start one when absent."
   (interactive)
