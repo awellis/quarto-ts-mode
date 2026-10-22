@@ -149,6 +149,10 @@ The underlying text is unchanged and delimiters can be revealed with
             quarto-ts-insert-command-map)
 (keymap-set quarto-ts-mode-map "C-c C-q g"
             quarto-ts-eglot-command-map)
+;; Reuse Doom/Markdown's existing localleader toggle binding while dispatching
+;; to the tree-sitter presentation implementation in Quarto buffers.
+(define-key quarto-ts-mode-map [remap markdown-toggle-markup-hiding]
+            #'quarto-ts-toggle-hide-markup)
 
 ;;;###autoload
 (define-derived-mode quarto-ts-mode markdown-ts-mode "Quarto"

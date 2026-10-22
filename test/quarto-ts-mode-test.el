@@ -9,6 +9,9 @@
 (ert-deftest quarto-ts-mode-binds-authoring-and-eglot-commands ()
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q h")
               #'quarto-ts-toggle-hide-markup))
+  (should (eq (lookup-key quarto-ts-mode-map
+                          [remap markdown-toggle-markup-hiding])
+              #'quarto-ts-toggle-hide-markup))
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q i c")
               #'quarto-ts-insert-citation))
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q i a")
