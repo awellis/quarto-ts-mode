@@ -10,13 +10,13 @@
 
 (ert-deftest quarto-ts-eglot-configures-julia-language-server ()
   (with-temp-buffer
-    (setq-local major-mode 'julia-mode)
-    (let ((eglot-server-programs nil))
-      (quarto-ts-eglot--configure-server 'julia)
-      (should
-       (equal (alist-get 'julia-mode eglot-server-programs)
-              '("julia" "--startup-file=no" "--history-file=no"
-                "-e" "using LanguageServer; runserver()"))))))
+    (setq-local major-mode 'julia-mode
+                eglot-server-programs nil)
+    (quarto-ts-eglot--configure-server 'julia)
+    (should
+     (equal (alist-get 'julia-mode eglot-server-programs)
+            '("julia" "--startup-file=no" "--history-file=no"
+              "-e" "using LanguageServer; runserver()")))))
 
 (ert-deftest quarto-ts-eglot-maps-diagnostic-positions-identically ()
   (let ((source (generate-new-buffer " *quarto-source-test*"))

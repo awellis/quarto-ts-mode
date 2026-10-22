@@ -26,6 +26,7 @@
 
 (require 'quarto-ts-shadow)
 (require 'quarto-ts-eglot)
+(require 'quarto-ts-panache)
 (require 'quarto-ts-authoring)
 (require 'quarto-ts-font-lock)
 (require 'quarto-ts-yaml)
@@ -97,6 +98,12 @@ The underlying text is unchanged and delimiters can be revealed with
   "f" #'quarto-ts-eglot-format-cell
   "a" #'quarto-ts-eglot-code-actions)
 
+(defvar-keymap quarto-ts-panache-command-map
+  "e" #'quarto-ts-panache-ensure
+  "f" #'quarto-ts-panache-format-buffer
+  "a" #'quarto-ts-panache-code-actions
+  "r" #'quarto-ts-panache-reconnect)
+
 (defvar-keymap quarto-ts-preview-command-map
   "p" #'quarto-ts-preview-start
   "s" #'quarto-ts-preview-stop
@@ -137,6 +144,7 @@ The underlying text is unchanged and delimiters can be revealed with
   "C-c C-q d" #'quarto-ts-yaml-describe-option
   "C-c C-q i" quarto-ts-insert-command-map
   "C-c C-q g" quarto-ts-eglot-command-map
+  "C-c C-q w" quarto-ts-panache-command-map
   "C-c C-q v" quarto-ts-preview-command-map)
 
 ;; `defvar-keymap' preserves an existing map when this development file is
@@ -149,6 +157,8 @@ The underlying text is unchanged and delimiters can be revealed with
             quarto-ts-insert-command-map)
 (keymap-set quarto-ts-mode-map "C-c C-q g"
             quarto-ts-eglot-command-map)
+(keymap-set quarto-ts-mode-map "C-c C-q w"
+            quarto-ts-panache-command-map)
 ;; Reuse Doom/Markdown's existing localleader toggle binding while dispatching
 ;; to the tree-sitter presentation implementation in Quarto buffers.
 (define-key quarto-ts-mode-map [remap markdown-toggle-markup-hiding]
@@ -171,6 +181,7 @@ The underlying text is unchanged and delimiters can be revealed with
             #'quarto-ts-authoring-completion-at-point nil t)
   (quarto-ts-authoring-setup)
   (quarto-ts-yaml-setup)
+  (quarto-ts-panache-setup)
   (quarto-ts-cell-fold-mode 1)
   (quarto-ts-shadow-mode 1))
 

@@ -37,6 +37,8 @@ The current package provides:
   `@fig-...`, `@tbl-...`, and `@sec-...`.
 - Citar citation completion and insertion when Citar is installed.
 - Callout and shortcode insertion commands.
+- Optional Panache document-level Eglot support for Quarto completion, hover,
+  diagnostics, outlines, navigation, rename, formatting, and code actions.
 - Persistent shadow buffers for each language, with explicit bidirectional
   source maps when generated text changes positions.
 - OJS-to-JavaScript translation for reactive names, `viewof`, `mutable`,
@@ -58,8 +60,9 @@ The current package provides:
 - Independent preview sessions for projects and standalone documents.
 - Preview URL detection, browsing, refresh, logs, and clean process shutdown.
 - Asynchronous document/project rendering with optional output formats.
-- Unit tests plus live Ruff, R, Julia, and TypeScript language servers; ESS,
-  Python, Julia, and OJS runners; preview; and render integration tests.
+- Unit tests plus live Panache, Ruff, R, Julia, and TypeScript language
+  servers; ESS, Python, Julia, and OJS runners; preview; and render integration
+  tests.
 
 Edits outside executable cell bodies are intentionally discarded when mapping
 language-server changes back to a document. Interactive snippet fields are not
@@ -71,8 +74,9 @@ yet preserved.
 - The `markdown` and `markdown-inline` tree-sitter grammars
 - The `yaml` tree-sitter grammar for standalone Quarto project files
 - Language grammars and major modes for the embedded languages you use
-- Optional: Citar for citations; `yaml-language-server` for project validation;
-  ESS and R `languageserver` for R; `julia-repl`, `julia-mode`, and Julia
+- Optional: Panache for document-level Quarto intelligence; Citar for citation
+  insertion; `yaml-language-server` for project validation; ESS and R
+  `languageserver` for R; `julia-repl`, `julia-mode`, and Julia
   `LanguageServer` for Julia; an inferior Python process; and
   `typescript-language-server` plus TypeScript's `tsserver` for OJS
 
@@ -119,6 +123,10 @@ grammars are unavailable.
 | `C-c C-q g r` | Rename an embedded-language symbol |
 | `C-c C-q g f` | Format the current executable cell |
 | `C-c C-q g a` | Run embedded-language code actions |
+| `C-c C-q w e` | Start Panache for the Quarto document |
+| `C-c C-q w f` | Format the document with Panache |
+| `C-c C-q w a` | Run Panache document code actions |
+| `C-c C-q w r` | Reconnect Panache |
 | `C-c C-q i c` | Insert or edit a citation with Citar |
 | `C-c C-q i a` | Insert a callout |
 | `C-c C-q i s` | Insert a shortcode |

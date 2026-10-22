@@ -7,7 +7,7 @@ S_LISP ?=
 TREE_SITTER_PATH ?=
 
 ELISP_FILES = quarto-ts-cell.el quarto-ts-ojs.el quarto-ts-shadow.el quarto-ts-eglot.el \
-	quarto-ts-authoring.el quarto-ts-font-lock.el quarto-ts-yaml.el \
+	quarto-ts-panache.el quarto-ts-authoring.el quarto-ts-font-lock.el quarto-ts-yaml.el \
 	quarto-ts-preview.el quarto-ts-runner.el quarto-ts-mode.el
 
 OPTIONAL_LOAD_PATHS = $(if $(ESS_LISP),-L $(ESS_LISP)) \
@@ -27,6 +27,7 @@ test:
 		-l test/quarto-ts-cell-test.el \
 		-l test/quarto-ts-shadow-test.el \
 		-l test/quarto-ts-eglot-test.el \
+		-l test/quarto-ts-panache-test.el \
 		-l test/quarto-ts-preview-test.el \
 		-l test/quarto-ts-runner-test.el \
 		-l test/quarto-ts-mode-test.el \

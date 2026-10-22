@@ -19,7 +19,11 @@
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q g r")
               #'quarto-ts-eglot-rename))
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q g f")
-              #'quarto-ts-eglot-format-cell)))
+              #'quarto-ts-eglot-format-cell))
+  (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q w e")
+              #'quarto-ts-panache-ensure))
+  (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q w f")
+              #'quarto-ts-panache-format-buffer)))
 
 (ert-deftest quarto-ts-mode-adds-cells-to-imenu ()
   (with-temp-buffer

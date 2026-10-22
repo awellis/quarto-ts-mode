@@ -44,7 +44,14 @@ intelligence, execution, and Quarto processes can evolve independently.
      executable cells while rejecting changes to synthetic prose.
    - Interactive snippet fields remain planned.
 
-6. `quarto-ts-font-lock.el`
+6. `quarto-ts-panache.el`
+   - Optional Panache Eglot session in the Quarto source buffer.
+   - Document-level completion, diagnostics, hover, outlines, navigation,
+     rename, formatting, and code actions.
+   - Coexists with language-specific Eglot sessions in shadow buffers.
+   - Document formatting remains opt-in because it may make broad edits.
+
+7. `quarto-ts-font-lock.el`
    - Quarto-specific semantic faces layered over native Markdown and YAML.
    - Distinct cell fences, languages, options, citations, cross-references,
      attributes, callouts, shortcodes, and table captions.
@@ -60,19 +67,19 @@ intelligence, execution, and Quarto processes can evolve independently.
      from leaking between Python and Julia code blocks.
    - Conventional major-mode font-lock remains the grammar fallback.
 
-7. `quarto-ts-authoring.el`
+8. `quarto-ts-authoring.el`
    - Context-sensitive cell-option name and value completion.
    - Cached project-wide cross-reference label discovery and completion.
    - Optional Citar completion and citation insertion.
    - Callout and shortcode insertion commands.
 
-8. `quarto-ts-yaml.el`
+9. `quarto-ts-yaml.el`
    - Schema-backed completion and documentation for front matter and project
      configuration files.
    - Project-aware profile, filter, and extension values.
    - Optional YAML Language Server validation against Quarto's installed schema.
 
-9. `quarto-ts-runner.el`
+10. `quarto-ts-runner.el`
    - Language-neutral cell and region execution.
    - ESS, inferior Python, and `julia-repl` adapters.
    - OJS execution through Quarto's browser preview, preserving reactive
@@ -80,7 +87,7 @@ intelligence, execution, and Quarto processes can evolve independently.
    - Mixed-language cells-above/all execution and `eval: false` handling.
    - Further terminal transports remain configurable extensions.
 
-10. `quarto-ts-preview.el`
+11. `quarto-ts-preview.el`
    - One preview process per standalone file or Quarto project.
    - URL detection, browsing, refresh, logs, and lifecycle management.
    - Asynchronous document and project rendering with format selection.
@@ -112,6 +119,8 @@ Eglot integration.
   ordinary Eglot.
 - TypeScript Language Server can provide completion, diagnostics, xrefs,
   rename, and formatting through a translated OJS shadow.
+- Panache can manage the Quarto source while TypeScript Language Server manages
+  its OJS shadow, with independent navigation and diagnostics.
 - Ruff diagnostics retain the same positions and can be reported by Flymake in
   the `.qmd` source buffer.
 - The Python runner starts an inferior process, waits for initialization, and
@@ -143,6 +152,7 @@ Eglot integration.
 13. ~~Map rename, formatting, and code-action edits back to Quarto source.~~
 14. ~~Integrate into Doom while retaining `poly-quarto-mode` as a fallback.~~
 15. ~~Add mapped TypeScript tooling and Quarto-native execution for OJS.~~
+16. ~~Integrate Panache for document-level Quarto language intelligence.~~
 
 ## Initial non-goals
 

@@ -219,6 +219,66 @@
           (quarto-ts-shadow-kill-all))
         (kill-buffer source)))))
 
+(ert-deftest quarto-ts-panache-coexists-with-ojs-language-server ()
+  (skip-unless
+   (and (executable-find "panache")
+        (executable-find "typescript-language-server")))
+  (let* ((fixture
+          (expand-file-name "fixtures/ojs.qmd"
+                            quarto-ts-eglot-integration-test-directory))
+         (source (find-file-noselect fixture))
+         panache-server
+         shadow
+         ojs-server)
+    (unwind-protect
+        (with-current-buffer source
+          (quarto-ts-mode)
+          (goto-char (point-max))
+          (insert "\nSee @fig-controls.\n")
+          (quarto-ts-panache-ensure)
+          ;; `eglot-ensure' connects from `post-command-hook'.
+          (run-hooks 'post-command-hook)
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline) (null panache-server))
+              (accept-process-output nil 0.2)
+              (setq panache-server (eglot-current-server))))
+          (should panache-server)
+          (should (jsonrpc-running-p panache-server))
+          (goto-char (point-min))
+          (search-forward "@fig-controls")
+          (backward-char)
+          (let* ((identifier (xref-backend-identifier-at-point 'eglot))
+                 (definitions
+                  (xref-backend-definitions 'eglot identifier)))
+            (should identifier)
+            (should definitions))
+          (goto-char (point-min))
+          (search-forward "viewof threshold")
+          (setq shadow (quarto-ts-shadow-buffer 'ojs))
+          (quarto-ts-eglot-ensure 'ojs)
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline) (null ojs-server))
+              (accept-process-output nil 0.2)
+              (setq ojs-server
+                    (with-current-buffer shadow (eglot-current-server)))))
+          (should ojs-server)
+          (should (jsonrpc-running-p ojs-server))
+          (should-not (eq panache-server ojs-server))
+          (should (eq (xref-find-backend) 'quarto-ts-eglot))
+          (goto-char (point-min))
+          (search-forward "@fig-controls")
+          (backward-char)
+          (should (eq (xref-find-backend) 'eglot)))
+      (when ojs-server
+        (ignore-errors (eglot-shutdown ojs-server)))
+      (when panache-server
+        (ignore-errors (eglot-shutdown panache-server)))
+      (when (buffer-live-p source)
+        (with-current-buffer source
+          (set-buffer-modified-p nil)
+          (quarto-ts-shadow-kill-all))
+        (kill-buffer source)))))
+
 (ert-deftest quarto-ts-runner-sends-code-to-python-process ()
   (skip-unless (executable-find "python3"))
   (let ((python-shell-interpreter (executable-find "python3"))
