@@ -33,6 +33,14 @@
   "Function returning the executable cells in the current buffer.
 The function accepts optional region bounds BEG and END.")
 
+(defface quarto-ts-cell-fold-summary
+  '((t :inherit shadow :slant italic))
+  "Face used for folded Quarto cell summaries."
+  :group 'quarto-ts)
+
+(defvar-local quarto-ts-cell--fold-overlays nil
+  "Body-hiding overlays for folded cells in the current buffer.")
+
 (defun quarto-ts-cell--normalize-language (text)
   "Return the normalized language symbol represented by TEXT."
   (when text
@@ -162,6 +170,102 @@ With COUNT, move backward that many cells."
         (goto-char (quarto-ts-cell-body-begin cell))
         (push-mark (quarto-ts-cell-body-end cell) nil t))
     (user-error "Point is not in a Quarto cell")))
+
+(defun quarto-ts-cell--fold-overlay (cell)
+  "Return the folding overlay associated with CELL, or nil."
+  (cl-find-if
+   (lambda (overlay)
+     (and (overlay-buffer overlay)
+          (= (overlay-start overlay) (quarto-ts-cell-body-begin cell))
+          (= (overlay-end overlay) (quarto-ts-cell-body-end cell))))
+   quarto-ts-cell--fold-overlays))
+
+(defun quarto-ts-cell--delete-fold-overlay (overlay)
+  "Delete folding OVERLAY and its summary overlay."
+  (when-let* ((summary (overlay-get overlay 'quarto-ts-cell-summary-overlay)))
+    (delete-overlay summary))
+  (setq quarto-ts-cell--fold-overlays
+        (delq overlay quarto-ts-cell--fold-overlays))
+  (delete-overlay overlay))
+
+(defun quarto-ts-cell--isearch-open (overlay)
+  "Unfold the cell hidden by OVERLAY during an isearch match."
+  (quarto-ts-cell--delete-fold-overlay overlay))
+
+(defun quarto-ts-cell--fold-summary (cell)
+  "Return a display summary for folded CELL."
+  (let* ((language (quarto-ts-cell-language cell))
+         (label (quarto-ts-cell-label cell))
+         (lines (count-lines (quarto-ts-cell-body-begin cell)
+                             (quarto-ts-cell-body-end cell))))
+    (propertize
+     (format "  … %s%s · %d line%s\n"
+             language
+             (if label (format ": %s" label) "")
+             lines
+             (if (= lines 1) "" "s"))
+     'face 'quarto-ts-cell-fold-summary)))
+
+(defun quarto-ts-cell-fold (&optional cell)
+  "Fold CELL or the executable cell at point."
+  (interactive)
+  (let ((cell (or cell (quarto-ts-cell-at-point))))
+    (unless cell
+      (user-error "Point is not in a Quarto cell"))
+    (unless (quarto-ts-cell--fold-overlay cell)
+      (let* ((beg (quarto-ts-cell-body-begin cell))
+             (end (quarto-ts-cell-body-end cell))
+             (body (make-overlay beg end nil t nil))
+             (summary (make-overlay beg beg nil t nil)))
+        (overlay-put body 'invisible 'quarto-ts-cell)
+        (overlay-put body 'evaporate t)
+        (overlay-put body 'isearch-open-invisible
+                     #'quarto-ts-cell--isearch-open)
+        (overlay-put body 'quarto-ts-cell-summary-overlay summary)
+        (overlay-put summary 'before-string
+                     (quarto-ts-cell--fold-summary cell))
+        (push body quarto-ts-cell--fold-overlays)))))
+
+(defun quarto-ts-cell-unfold (&optional cell)
+  "Unfold CELL or the executable cell at point."
+  (interactive)
+  (let ((cell (or cell (quarto-ts-cell-at-point))))
+    (unless cell
+      (user-error "Point is not in a Quarto cell"))
+    (when-let* ((overlay (quarto-ts-cell--fold-overlay cell)))
+      (quarto-ts-cell--delete-fold-overlay overlay))))
+
+(defun quarto-ts-cell-toggle-fold ()
+  "Toggle folding of the executable cell at point."
+  (interactive)
+  (if-let* ((cell (quarto-ts-cell-at-point)))
+      (if (quarto-ts-cell--fold-overlay cell)
+          (quarto-ts-cell-unfold cell)
+        (quarto-ts-cell-fold cell))
+    (user-error "Point is not in a Quarto cell")))
+
+(defun quarto-ts-cell-fold-all ()
+  "Fold every executable cell in the current document."
+  (interactive)
+  (dolist (cell (quarto-ts-cell-list))
+    (quarto-ts-cell-fold cell)))
+
+(defun quarto-ts-cell-unfold-all ()
+  "Unfold every executable cell in the current document."
+  (interactive)
+  (dolist (overlay (copy-sequence quarto-ts-cell--fold-overlays))
+    (quarto-ts-cell--delete-fold-overlay overlay)))
+
+(define-minor-mode quarto-ts-cell-fold-mode
+  "Enable folding of executable Quarto cell bodies."
+  :lighter nil
+  (if quarto-ts-cell-fold-mode
+      (progn
+        (add-to-invisibility-spec 'quarto-ts-cell)
+        (add-hook 'kill-buffer-hook #'quarto-ts-cell-unfold-all nil t))
+    (remove-hook 'kill-buffer-hook #'quarto-ts-cell-unfold-all t)
+    (quarto-ts-cell-unfold-all)
+    (remove-from-invisibility-spec 'quarto-ts-cell)))
 
 (provide 'quarto-ts-cell)
 ;;; quarto-ts-cell.el ends here

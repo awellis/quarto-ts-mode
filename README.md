@@ -1,46 +1,72 @@
 # quarto-ts-mode
 
-An experimental Emacs 32 major mode for authoring Quarto documents.
+An Emacs 32 major mode for authoring Quarto documents.
 
-The package is being developed locally before Doom Emacs integration. It uses
-Emacs's built-in `markdown-ts-mode` rather than Polymode and is intended to
-provide the editing, code-running, preview, and embedded-language tooling found
-in `quarto-nvim`.
+The package uses Emacs's built-in `markdown-ts-mode` rather than Polymode and
+provides integrated editing, execution, preview, authoring, and
+embedded-language tooling.
 
 ## Status
 
-This is an early parser and embedded-language prototype. It currently provides:
+The current package provides:
 
 - A `quarto-ts-mode` derived from `markdown-ts-mode`.
 - `.qmd` file association.
 - R, Python, Julia, and OJS code-block mode aliases.
 - Tree-sitter-backed executable-cell extraction.
 - Cell option and label extraction.
-- Cell navigation and marking commands.
+- Cell navigation, marking, folding, and fold-all commands.
+- Imenu entries for labelled and unlabelled executable cells.
+- Dedicated semantic faces for cell fences, languages, options, citations,
+  cross-references, attributes, callouts, shortcodes, and table captions.
+- Theme-aware table styling with distinct headers, body cells, delimiters,
+  alignment rows, and header/body backgrounds.
+- Independent inline-Markdown parsing inside table cells, preserving link,
+  emphasis, code, and other inline syntax highlighting.
+- An AUCTeX-like presentation layer that hides Markdown delimiters and link
+  destinations while retaining editable source text.
+- Cleaner cell-option, shortcode, callout, code-fence, and LaTeX-math display.
+- Native YAML, Python, and Julia tree-sitter fontification, with conventional
+  language-mode font-lock fallbacks when a grammar is unavailable.
+- Context-sensitive completion for Quarto `#|` option names and common values.
+- Schema-backed completion and documentation for document front matter and
+  `_quarto.yml`/`_quarto.yaml` files, using the schema installed with Quarto.
+- Project-aware YAML values for profiles, Lua filters, and extensions.
+- Optional YAML Language Server validation using a generated Quarto schema.
+- Cached project-wide completion for Quarto cross-references such as
+  `@fig-...`, `@tbl-...`, and `@sec-...`.
+- Citar citation completion and insertion when Citar is installed.
+- Callout and shortcode insertion commands.
 - Persistent, position-preserving shadow buffers for each language.
 - Ordinary Eglot sessions attached to language shadow buffers.
 - Flymake diagnostics mapped back into the `.qmd` source buffer.
 - Completion, hover, and signature-help forwarding.
 - Completion text edits copied back from executable cell bodies.
 - Definitions and references remapped from synthetic files to `.qmd` files.
+- Rename, cell formatting, and code-action edits mapped safely back from
+  language shadow buffers.
 - Cell, line, region, cells-above, and all-cells execution commands.
 - Optional ESS, inferior Python, and `julia-repl` runner adapters.
 - Respect for Quarto's `eval: false` cell option.
 - Independent preview sessions for projects and standalone documents.
 - Preview URL detection, browsing, refresh, logs, and clean process shutdown.
 - Asynchronous document/project rendering with optional output formats.
-- Unit tests plus live Ruff, Python, preview, and render integration tests.
+- Unit tests plus live Ruff, R and Julia language servers, ESS, Python and
+  Julia runners, preview, and render integration tests.
 
-Rename, formatting, and workspace edits are not yet mapped. Edits outside
-executable cell bodies are intentionally discarded, and interactive snippet
-fields are not yet preserved.
+Edits outside executable cell bodies are intentionally discarded when mapping
+language-server changes back to a document. Interactive snippet fields are not
+yet preserved.
 
 ## Requirements
 
 - GNU Emacs 32
 - The `markdown` and `markdown-inline` tree-sitter grammars
+- The `yaml` tree-sitter grammar for standalone Quarto project files
 - Language grammars and major modes for the embedded languages you use
-- Optional: ESS for R, `julia-repl` for Julia, and an inferior Python process
+- Optional: Citar for citations; `yaml-language-server` for project validation;
+  ESS and R `languageserver` for R; `julia-repl`, `julia-mode`, and Julia
+  `LanguageServer` for Julia; and an inferior Python process
 
 Install Markdown parsers interactively with:
 
@@ -52,7 +78,16 @@ M-x markdown-ts-mode-install-parsers
 
 ```sh
 make check
-make integration-test  # requires Ruff and Python 3
+make integration-test  # requires Ruff, Python 3, and Quarto
+
+# Optional local ESS and Julia integration
+make integration-test \\
+  ESS_LISP=/path/to/ess/lisp \\
+  JULIA_REPL_LISP=/path/to/julia-repl \\
+  JULIA_MODE_LISP=/path/to/julia-mode \\
+  JULIA_TS_MODE_LISP=/path/to/julia-ts-mode \\
+  S_LISP=/path/to/s.el \\
+  TREE_SITTER_PATH=/path/to/tree-sitter-libraries
 ```
 
 Development grammars may be installed in the ignored project-local
@@ -66,8 +101,19 @@ grammars are unavailable.
 | `C-c C-q n` | Next cell |
 | `C-c C-q p` | Previous cell |
 | `C-c C-q m` | Mark cell body |
+| `C-c C-q f` | Toggle current cell fold |
+| `C-c C-q F` | Fold all cells |
+| `C-c C-q u` | Unfold all cells |
+| `C-c C-q h` | Toggle markup visibility |
+| `C-c C-q d` | Describe the Quarto YAML option at point |
 | `C-c C-q s` | Open a language shadow buffer |
 | `C-c C-q e` | Start Eglot for an embedded language |
+| `C-c C-q g r` | Rename an embedded-language symbol |
+| `C-c C-q g f` | Format the current executable cell |
+| `C-c C-q g a` | Run embedded-language code actions |
+| `C-c C-q i c` | Insert or edit a citation with Citar |
+| `C-c C-q i a` | Insert a callout |
+| `C-c C-q i s` | Insert a shortcode |
 | `C-c C-q c` | Run current cell |
 | `C-c C-q RET` | Run current cell and move to the next |
 | `C-c C-q l` | Run current line |
@@ -84,5 +130,5 @@ grammars are unavailable.
 | `C-c C-q v f` | Render document to a format |
 | `C-c C-q v P` | Render project |
 
-These bindings are provisional. Doom-specific bindings will live in the Doom
-configuration rather than this package.
+In `_quarto.yml` and `_quarto.yaml`, `C-c C-q d` shows option documentation and
+`C-c C-q e` starts YAML Language Server validation.

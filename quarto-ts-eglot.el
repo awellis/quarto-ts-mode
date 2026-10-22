@@ -20,8 +20,35 @@
 (require 'quarto-ts-shadow)
 (require 'xref)
 
+(defcustom quarto-ts-eglot-language-server-programs
+  '((julia . ("julia" "--startup-file=no" "--history-file=no"
+              "-e" "using LanguageServer; runserver()")))
+  "Language-server commands not supplied by Eglot itself.
+Each entry maps an embedded language symbol to a process argument list."
+  :type '(alist :key-type symbol :value-type (repeat string))
+  :group 'quarto-ts)
+
 (defvar-local quarto-ts-eglot--diagnostics nil
   "Alist of mapped Flymake diagnostics keyed by embedded language.")
+
+(defun quarto-ts-eglot--configure-server (language)
+  "Configure an explicit Eglot server command for LANGUAGE when needed."
+  (when-let* ((command
+               (alist-get language quarto-ts-eglot-language-server-programs)))
+    (setq-local eglot-server-programs (copy-tree eglot-server-programs))
+    (setf (alist-get major-mode eglot-server-programs)
+          (copy-sequence command))))
+
+(defun quarto-ts-eglot--shadow-managed-mode-changed ()
+  "Update source diagnostics when shadow-buffer Eglot state changes."
+  (when (eglot-managed-p)
+    ;; Diagnostics belong in the Quarto source rather than the implementation
+    ;; buffer.  Eglot may enable Flymake after its asynchronous connection.
+    (flymake-mode -1)
+    (when (buffer-live-p quarto-ts-shadow-source-buffer)
+      (with-current-buffer quarto-ts-shadow-source-buffer
+        (when flymake-mode
+          (flymake-start t))))))
 
 (defun quarto-ts-eglot--map-diagnostic (source diagnostic)
   "Map shadow-buffer DIAGNOSTIC into SOURCE using identical positions."
@@ -301,6 +328,49 @@ REPORT-FN follows the protocol of `flymake-diagnostic-functions'."
       (setq quarto-ts-eglot--diagnostics nil)
       (funcall report-fn nil))))
 
+(defun quarto-ts-eglot--apply-shadow-edit (function)
+  "Call FUNCTION in the managed shadow buffer and copy cell edits back."
+  (let ((source (current-buffer)))
+    (if-let* ((context (quarto-ts-eglot--shadow-context-at-point))
+              (language (nth 0 context))
+              (shadow (nth 1 context))
+              (source-point (nth 2 context)))
+        (let ((marker-sets
+               (quarto-ts-eglot--cell-markers source shadow language)))
+          (unwind-protect
+              (progn
+                (with-current-buffer shadow
+                  (goto-char source-point)
+                  (funcall function))
+                (quarto-ts-eglot--copy-shadow-cells
+                 source shadow marker-sets)
+                (with-current-buffer source
+                  (quarto-ts-shadow-sync language)))
+            (quarto-ts-eglot--release-markers marker-sets)))
+      (user-error "Point is not in an Eglot-managed Quarto cell"))))
+
+(defun quarto-ts-eglot-rename (new-name)
+  "Rename the embedded-language symbol at point to NEW-NAME."
+  (interactive "sRename to: ")
+  (quarto-ts-eglot--apply-shadow-edit
+   (lambda () (eglot-rename new-name))))
+
+(defun quarto-ts-eglot-format-cell ()
+  "Format the executable cell at point through Eglot."
+  (interactive)
+  (if-let* ((cell (quarto-ts-cell-at-point)))
+      (let ((beg (quarto-ts-cell-body-begin cell))
+            (end (quarto-ts-cell-body-end cell)))
+        (quarto-ts-eglot--apply-shadow-edit
+         (lambda () (eglot-format beg end))))
+    (user-error "Point is not in a Quarto cell")))
+
+(defun quarto-ts-eglot-code-actions ()
+  "Run embedded-language Eglot code actions and map edits back."
+  (interactive)
+  (quarto-ts-eglot--apply-shadow-edit
+   (lambda () (call-interactively #'eglot-code-actions))))
+
 (defun quarto-ts-eglot-ensure (language)
   "Create LANGUAGE's shadow buffer and ensure that Eglot manages it."
   (interactive
@@ -316,6 +386,9 @@ REPORT-FN follows the protocol of `flymake-diagnostic-functions'."
   (let ((source (current-buffer))
         (shadow (quarto-ts-shadow-buffer language)))
     (with-current-buffer shadow
+      (quarto-ts-eglot--configure-server language)
+      (add-hook 'eglot-managed-mode-hook
+                #'quarto-ts-eglot--shadow-managed-mode-changed nil t)
       (unless (eglot-current-server)
         (let ((current-prefix-arg nil))
           (call-interactively #'eglot)))

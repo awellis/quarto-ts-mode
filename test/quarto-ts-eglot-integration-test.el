@@ -58,6 +58,83 @@
           (quarto-ts-shadow-kill-all))
         (kill-buffer source)))))
 
+(ert-deftest quarto-ts-eglot-starts-r-language-server-in-shadow-buffer ()
+  (skip-unless
+   (and (executable-find "R")
+        (locate-library "ess-r-mode")
+        (= 0 (call-process
+              "R" nil nil nil "--slave" "-e"
+              (concat "quit(status=if (requireNamespace("
+                      "'languageserver', quietly=TRUE)) 0 else 1)")))))
+  (require 'ess-r-mode)
+  (let* ((fixture
+          (expand-file-name "fixtures/mixed.qmd"
+                            quarto-ts-eglot-integration-test-directory))
+         (source (find-file-noselect fixture))
+         shadow
+         server)
+    (unwind-protect
+        (with-current-buffer source
+          (quarto-ts-mode)
+          (goto-char (point-min))
+          (search-forward "mean(1:10)")
+          (setq shadow (quarto-ts-shadow-buffer 'r))
+          (quarto-ts-eglot-ensure 'r)
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline) (null server))
+              (accept-process-output nil 0.2)
+              (setq server
+                    (with-current-buffer shadow (eglot-current-server)))))
+          (should server)
+          (should (eq (buffer-local-value 'major-mode shadow)
+                      'ess-r-mode))
+          (should (jsonrpc-running-p server)))
+      (when server
+        (ignore-errors (eglot-shutdown server)))
+      (when (buffer-live-p source)
+        (with-current-buffer source
+          (set-buffer-modified-p nil)
+          (quarto-ts-shadow-kill-all))
+        (kill-buffer source)))))
+
+(ert-deftest quarto-ts-eglot-starts-julia-language-server-in-shadow-buffer ()
+  (skip-unless
+   (and (executable-find "julia")
+        (locate-library "julia-mode")
+        (= 0 (call-process
+              "julia" nil nil nil "--startup-file=no" "-e"
+              "using LanguageServer"))))
+  (require 'julia-mode)
+  (let* ((fixture
+          (expand-file-name "fixtures/mixed.qmd"
+                            quarto-ts-eglot-integration-test-directory))
+         (source (find-file-noselect fixture))
+         shadow
+         server)
+    (unwind-protect
+        (with-current-buffer source
+          (quarto-ts-mode)
+          (goto-char (point-min))
+          (search-forward "DataFrame(x = 1:3)")
+          (setq shadow (quarto-ts-shadow-buffer 'julia))
+          (quarto-ts-eglot-ensure 'julia)
+          (let ((deadline (+ (float-time) 90)))
+            (while (and (< (float-time) deadline) (null server))
+              (accept-process-output nil 0.2)
+              (setq server
+                    (with-current-buffer shadow (eglot-current-server)))))
+          (should server)
+          (should (eq (buffer-local-value 'major-mode shadow)
+                      'julia-mode))
+          (should (jsonrpc-running-p server)))
+      (when server
+        (ignore-errors (eglot-shutdown server)))
+      (when (buffer-live-p source)
+        (with-current-buffer source
+          (set-buffer-modified-p nil)
+          (quarto-ts-shadow-kill-all))
+        (kill-buffer source)))))
+
 (ert-deftest quarto-ts-runner-sends-code-to-python-process ()
   (skip-unless (executable-find "python3"))
   (let ((python-shell-interpreter (executable-find "python3"))
@@ -83,6 +160,40 @@
         (when-let* ((buffer (and process (process-buffer process))))
           (when (buffer-live-p buffer)
             (kill-buffer buffer)))))))
+
+(ert-deftest quarto-ts-font-lock-uses-distinct-python-and-julia-parsers ()
+  (skip-unless
+   (and (treesit-ready-p 'python t)
+        (treesit-ready-p 'julia t)
+        (locate-library "julia-ts-mode")))
+  (require 'julia-ts-mode)
+  (let* ((fixture
+          (expand-file-name "fixtures/mixed.qmd"
+                            quarto-ts-eglot-integration-test-directory))
+         (source (find-file-noselect fixture)))
+    (unwind-protect
+        (with-current-buffer source
+          (quarto-ts-mode)
+          (font-lock-ensure)
+          (should (eq (alist-get 'python markdown-ts--code-block-languages)
+                      'python))
+          (should (eq (alist-get 'julia markdown-ts--code-block-languages)
+                      'julia))
+          (goto-char (point-min))
+          (search-forward "import")
+          (backward-word)
+          (should (eq (treesit-language-at (point)) 'python))
+          (should (eq (get-text-property (point) 'face)
+                      'font-lock-keyword-face))
+          (search-forward "using")
+          (backward-word)
+          (should (eq (treesit-language-at (point)) 'julia))
+          (should (eq (get-text-property (point) 'face)
+                      'font-lock-keyword-face)))
+      (when (buffer-live-p source)
+        (with-current-buffer source
+          (quarto-ts-shadow-kill-all))
+        (kill-buffer source)))))
 
 (ert-deftest quarto-ts-preview-starts-and-captures-url ()
   (skip-unless (executable-find "quarto"))
@@ -146,6 +257,78 @@
       (when (buffer-live-p buffer)
         (kill-buffer buffer))
       (delete-directory directory t))))
+
+(ert-deftest quarto-ts-runner-sends-code-to-ess-process ()
+  (skip-unless (and (executable-find "R")
+                    (locate-library "ess-inf")
+                    (locate-library "ess-r-mode")))
+  (require 'ess-inf)
+  (require 'ess-r-mode)
+  (let (process output process-buffer)
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name
+                (expand-file-name "runner-ess-integration.qmd"
+                                  temporary-file-directory))
+          (setq process (quarto-ts-runner--ess-process)
+                process-buffer (process-buffer process))
+          (quarto-ts-runner-ess-send
+           "quarto_ts_runner_value <- 6 * 7" nil)
+          (ess-wait-for-process process)
+          (setq output (get-buffer-create " *quarto-ess-test-output*"))
+          (ess-command "cat(quarto_ts_runner_value, '\\n')\n"
+                       output nil nil nil process)
+          (should
+           (string-match-p "42"
+                           (with-current-buffer output (buffer-string)))))
+      (when (process-live-p process)
+        (delete-process process))
+      (when (buffer-live-p process-buffer)
+        (kill-buffer process-buffer))
+      (when (buffer-live-p output)
+        (kill-buffer output)))))
+
+(ert-deftest quarto-ts-runner-sends-code-to-julia-repl ()
+  (skip-unless (and (executable-find "julia")
+                    (locate-library "julia-repl")))
+  (require 'julia-repl)
+  (let ((julia-repl-pop-to-buffer nil)
+        (julia-repl-switches "--startup-file=no --history-file=no")
+        inferior
+        process)
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name
+                (expand-file-name "runner-julia-integration.qmd"
+                                  temporary-file-directory))
+          (setq inferior (julia-repl-inferior-buffer)
+                process (get-buffer-process inferior))
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline)
+                        (process-live-p process)
+                        (not (with-current-buffer inferior
+                               (save-excursion
+                                 (goto-char (point-min))
+                                 (search-forward "julia>" nil t)))))
+              (accept-process-output process 0.2)))
+          (quarto-ts-runner-julia-send "println(6 * 7)" nil)
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline)
+                        (process-live-p process)
+                        (not (with-current-buffer inferior
+                               (save-excursion
+                                 (goto-char (point-min))
+                                 (re-search-forward "[\r\n]42[\r\n]" nil t)))))
+              (accept-process-output process 0.2)))
+          (should
+           (with-current-buffer inferior
+             (save-excursion
+               (goto-char (point-min))
+               (re-search-forward "[\r\n]42[\r\n]" nil t)))))
+      (when (process-live-p process)
+        (delete-process process))
+      (when (buffer-live-p inferior)
+        (kill-buffer inferior)))))
 
 (provide 'quarto-ts-eglot-integration-test)
 ;;; quarto-ts-eglot-integration-test.el ends here

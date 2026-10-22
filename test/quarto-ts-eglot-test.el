@@ -8,6 +8,16 @@
 (defconst quarto-ts-eglot-test-directory
   (file-name-directory (or load-file-name buffer-file-name)))
 
+(ert-deftest quarto-ts-eglot-configures-julia-language-server ()
+  (with-temp-buffer
+    (setq-local major-mode 'julia-mode)
+    (let ((eglot-server-programs nil))
+      (quarto-ts-eglot--configure-server 'julia)
+      (should
+       (equal (alist-get 'julia-mode eglot-server-programs)
+              '("julia" "--startup-file=no" "--history-file=no"
+                "-e" "using LanguageServer; runserver()"))))))
+
 (ert-deftest quarto-ts-eglot-maps-diagnostic-positions-identically ()
   (let ((source (generate-new-buffer " *quarto-source-test*"))
         (shadow (generate-new-buffer " *quarto-shadow-test*")))
@@ -124,6 +134,38 @@
                 (with-current-buffer shadow
                   (should-not (string-match-p
                                "OUTSIDE-CELL" (buffer-string))))))))
+      (quarto-ts-shadow-kill-all))))
+
+(ert-deftest quarto-ts-eglot-maps-rename-edits-back-from-shadow-buffer ()
+  (with-temp-buffer
+    (setq buffer-file-name
+          (expand-file-name "rename-fixture.qmd" temporary-file-directory))
+    (insert-file-contents
+     (expand-file-name "fixtures/mixed.qmd" quarto-ts-eglot-test-directory))
+    (markdown-ts-mode)
+    (quarto-ts-shadow-mode 1)
+    (unwind-protect
+        (progn
+          (quarto-ts-shadow-buffer 'python)
+          (goto-char (point-min))
+          (search-forward "matplotlib")
+          (let ((source (current-buffer))
+                rename-buffer)
+            (cl-letf (((symbol-function 'eglot-managed-p)
+                       (lambda () t))
+                      ((symbol-function 'eglot-rename)
+                       (lambda (new-name)
+                         (setq rename-buffer (current-buffer))
+                         (save-excursion
+                           (goto-char (point-min))
+                           (insert "OUTSIDE-CELL")
+                           (while (search-forward "matplotlib" nil t)
+                             (replace-match new-name t t))))))
+              (quarto-ts-eglot-rename "plotting")
+              (should-not (eq rename-buffer source))
+              (should (string-match-p "import plotting" (buffer-string)))
+              (should-not (string-match-p "OUTSIDE-CELL"
+                                          (buffer-string))))))
       (quarto-ts-shadow-kill-all))))
 
 (ert-deftest quarto-ts-eglot-forwards-hover-in-shadow-buffer ()

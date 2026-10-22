@@ -11,8 +11,8 @@
 ;;; Commentary:
 
 ;; An experimental Emacs 32 major mode for Quarto documents.  It builds on
-;; `markdown-ts-mode' and adds a Quarto cell model.  Execution, preview, and
-;; embedded-language Eglot support will be separate optional components.
+;; `markdown-ts-mode' and adds Quarto cells, execution, preview management,
+;; folding, and embedded-language Eglot support.
 
 ;;; Code:
 
@@ -26,8 +26,19 @@
 
 (require 'quarto-ts-shadow)
 (require 'quarto-ts-eglot)
+(require 'quarto-ts-authoring)
+(require 'quarto-ts-font-lock)
+(require 'quarto-ts-yaml)
 (require 'quarto-ts-preview)
 (require 'quarto-ts-runner)
+
+(defcustom quarto-ts-hide-markup t
+  "Non-nil means hide Markdown delimiters in Quarto buffers.
+The underlying text is unchanged and delimiters can be revealed with
+`quarto-ts-toggle-hide-markup'."
+  :type 'boolean
+  :safe #'booleanp
+  :group 'quarto-ts)
 
 (defcustom quarto-ts-code-block-modes
   '((r . ess-r-mode)
@@ -50,6 +61,42 @@
 
 (quarto-ts--install-code-block-modes)
 
+(defun quarto-ts--imenu-cell-node-p (node)
+  "Return non-nil when NODE is an executable-cell info string."
+  (and (string= (treesit-node-type node) "info_string")
+       (when-let* ((language-node
+                    (treesit-search-subtree node "language")))
+         (quarto-ts-cell--normalize-language
+          (treesit-node-text language-node t)))))
+
+(defun quarto-ts--imenu-cell-name (node)
+  "Return an Imenu name for the executable cell represented by NODE."
+  (when-let* ((cell (quarto-ts-cell-at-point (treesit-node-start node)))
+              (language (quarto-ts-cell-language cell)))
+    (if-let* ((label (quarto-ts-cell-label cell)))
+        (format "%s: %s" language label)
+      (format "%s cell at line %d"
+              language
+              (line-number-at-pos (quarto-ts-cell-fence-begin cell))))))
+
+(defun quarto-ts--install-imenu-cells ()
+  "Add labelled and unlabelled executable cells to Imenu."
+  (add-to-list
+   'treesit-simple-imenu-settings
+   `("Cells" ,#'quarto-ts--imenu-cell-node-p
+     nil ,#'quarto-ts--imenu-cell-name)
+   t))
+
+(defvar-keymap quarto-ts-insert-command-map
+  "c" #'quarto-ts-insert-citation
+  "a" #'quarto-ts-insert-callout
+  "s" #'quarto-ts-insert-shortcode)
+
+(defvar-keymap quarto-ts-eglot-command-map
+  "r" #'quarto-ts-eglot-rename
+  "f" #'quarto-ts-eglot-format-cell
+  "a" #'quarto-ts-eglot-code-actions)
+
 (defvar-keymap quarto-ts-preview-command-map
   "p" #'quarto-ts-preview-start
   "s" #'quarto-ts-preview-stop
@@ -60,11 +107,24 @@
   "f" #'quarto-ts-render-to
   "P" #'quarto-ts-render-project)
 
+(defun quarto-ts-toggle-hide-markup ()
+  "Toggle AUCTeX-like hiding of Markdown markup delimiters."
+  (interactive)
+  (setq-local quarto-ts-hide-markup (not markdown-ts-hide-markup)
+              markdown-ts-hide-markup quarto-ts-hide-markup)
+  (markdown-ts--set-hide-markup markdown-ts-hide-markup)
+  (message "Quarto markup is %s"
+           (if markdown-ts-hide-markup "hidden" "visible")))
+
 (defvar-keymap quarto-ts-mode-map
   :parent markdown-ts-mode-map
   "C-c C-q n" #'quarto-ts-cell-next
   "C-c C-q p" #'quarto-ts-cell-previous
   "C-c C-q m" #'quarto-ts-cell-mark
+  "C-c C-q f" #'quarto-ts-cell-toggle-fold
+  "C-c C-q F" #'quarto-ts-cell-fold-all
+  "C-c C-q u" #'quarto-ts-cell-unfold-all
+  "C-c C-q h" #'quarto-ts-toggle-hide-markup
   "C-c C-q s" #'quarto-ts-shadow-open
   "C-c C-q e" #'quarto-ts-eglot-ensure
   "C-c C-q c" #'quarto-ts-runner-run-cell
@@ -74,7 +134,21 @@
   "C-c C-q a" #'quarto-ts-runner-run-cells-above
   "C-c C-q b" #'quarto-ts-runner-run-all-cells
   "C-c C-q z" #'quarto-ts-runner-open-repl
+  "C-c C-q d" #'quarto-ts-yaml-describe-option
+  "C-c C-q i" quarto-ts-insert-command-map
+  "C-c C-q g" quarto-ts-eglot-command-map
   "C-c C-q v" quarto-ts-preview-command-map)
+
+;; `defvar-keymap' preserves an existing map when this development file is
+;; reloaded, so install newly introduced bindings explicitly as well.
+(keymap-set quarto-ts-mode-map "C-c C-q h"
+            #'quarto-ts-toggle-hide-markup)
+(keymap-set quarto-ts-mode-map "C-c C-q d"
+            #'quarto-ts-yaml-describe-option)
+(keymap-set quarto-ts-mode-map "C-c C-q i"
+            quarto-ts-insert-command-map)
+(keymap-set quarto-ts-mode-map "C-c C-q g"
+            quarto-ts-eglot-command-map)
 
 ;;;###autoload
 (define-derived-mode quarto-ts-mode markdown-ts-mode "Quarto"
@@ -82,6 +156,18 @@
   (setq-local comment-start "<!-- "
               comment-end " -->")
   (quarto-ts--install-code-block-modes)
+  (setq-local markdown-ts-hide-markup quarto-ts-hide-markup)
+  (quarto-ts-font-lock-setup quarto-ts-code-block-modes)
+  (markdown-ts--set-hide-markup markdown-ts-hide-markup)
+  (quarto-ts--install-imenu-cells)
+  (setq-local markdown-ts-code-block-commands
+              (remq 'completion-at-point
+                    markdown-ts-code-block-commands))
+  (add-hook 'completion-at-point-functions
+            #'quarto-ts-authoring-completion-at-point nil t)
+  (quarto-ts-authoring-setup)
+  (quarto-ts-yaml-setup)
+  (quarto-ts-cell-fold-mode 1)
   (quarto-ts-shadow-mode 1))
 
 ;;;###autoload
