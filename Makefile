@@ -6,7 +6,7 @@ JULIA_TS_MODE_LISP ?=
 S_LISP ?=
 TREE_SITTER_PATH ?=
 
-ELISP_FILES = quarto-ts-cell.el quarto-ts-shadow.el quarto-ts-eglot.el \
+ELISP_FILES = quarto-ts-cell.el quarto-ts-ojs.el quarto-ts-shadow.el quarto-ts-eglot.el \
 	quarto-ts-authoring.el quarto-ts-font-lock.el quarto-ts-yaml.el \
 	quarto-ts-preview.el quarto-ts-runner.el quarto-ts-mode.el
 

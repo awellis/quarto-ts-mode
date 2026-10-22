@@ -31,7 +31,11 @@
                    (flymake-make-diagnostic
                     shadow 13 25 :error "Undefined name"))))
             (let ((mapped
-                   (quarto-ts-eglot--map-diagnostic source diagnostic)))
+                   (cl-letf (((symbol-function
+                               'quarto-ts-eglot--source-cell-range-p)
+                              (lambda (&rest _) t)))
+                     (quarto-ts-eglot--map-diagnostic
+                      source 'python diagnostic))))
               (should (eq (flymake-diagnostic-buffer mapped) source))
               (should (= (flymake-diagnostic-beg mapped) 13))
               (should (= (flymake-diagnostic-end mapped) 25))

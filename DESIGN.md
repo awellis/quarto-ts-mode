@@ -21,20 +21,30 @@ intelligence, execution, and Quarto processes can evolve independently.
 
 3. `quarto-ts-shadow.el`
    - Persistent per-language shadow buffers.
-   - Source-position-preserving synchronization.
+   - Explicit bidirectional source/shadow position maps.
    - Synthetic file identities in the source project.
 
-4. `quarto-ts-eglot.el`
+4. `quarto-ts-ojs.el`
+   - Translates OJS cells into valid JavaScript for static language tooling.
+   - Preserves mappings across reactive names, `viewof`, `mutable`, imports,
+     blocks, `await`, and `yield` wrappers.
+   - Adds generated declarations for Quarto browser globals and cross-cell
+     names without exposing those declarations as editable source.
+
+5. `quarto-ts-eglot.el`
    - Ordinary Eglot sessions in language shadow buffers.
    - Flymake diagnostics mapped back to the Quarto source.
    - Completion, hover, and signature-help forwarding.
    - Completion edits copied back from executable cell bodies.
    - Xrefs remapped from synthetic files to Quarto source files.
-   - Rename, cell formatting, and code-action edits copied back from executable
-     cells while rejecting changes to synthetic prose.
+   - TypeScript Language Server support for generated OJS JavaScript.
+   - Rename and cell formatting edits mapped through OJS source maps; generated
+     edits are discarded.
+   - Other rename, formatting, and code-action edits are copied back from
+     executable cells while rejecting changes to synthetic prose.
    - Interactive snippet fields remain planned.
 
-5. `quarto-ts-font-lock.el`
+6. `quarto-ts-font-lock.el`
    - Quarto-specific semantic faces layered over native Markdown and YAML.
    - Distinct cell fences, languages, options, citations, cross-references,
      attributes, callouts, shortcodes, and table captions.
@@ -50,25 +60,27 @@ intelligence, execution, and Quarto processes can evolve independently.
      from leaking between Python and Julia code blocks.
    - Conventional major-mode font-lock remains the grammar fallback.
 
-6. `quarto-ts-authoring.el`
+7. `quarto-ts-authoring.el`
    - Context-sensitive cell-option name and value completion.
    - Cached project-wide cross-reference label discovery and completion.
    - Optional Citar completion and citation insertion.
    - Callout and shortcode insertion commands.
 
-7. `quarto-ts-yaml.el`
+8. `quarto-ts-yaml.el`
    - Schema-backed completion and documentation for front matter and project
      configuration files.
    - Project-aware profile, filter, and extension values.
    - Optional YAML Language Server validation against Quarto's installed schema.
 
-8. `quarto-ts-runner.el`
+9. `quarto-ts-runner.el`
    - Language-neutral cell and region execution.
    - ESS, inferior Python, and `julia-repl` adapters.
+   - OJS execution through Quarto's browser preview, preserving reactive
+     definitions, inputs, imports, DOM output, and cross-cell dependencies.
    - Mixed-language cells-above/all execution and `eval: false` handling.
    - Further terminal transports remain configurable extensions.
 
-9. `quarto-ts-preview.el`
+10. `quarto-ts-preview.el`
    - One preview process per standalone file or Quarto project.
    - URL detection, browsing, refresh, logs, and lifecycle management.
    - Asynchronous document and project rendering with format selection.
@@ -89,13 +101,17 @@ Eglot integration.
   than leaking the first guest parser across later cells.
 - Quarto options and document-level constructs retain semantic faces alongside
   language-native code fontification.
-- A shadow buffer can preserve every source position by blanking prose and
-  copying cells for one language verbatim.
+- Ordinary language shadows preserve source positions by blanking prose and
+  copying cells verbatim.
+- OJS shadows translate reactive syntax into valid JavaScript and retain
+  explicit source maps across generated wrappers.
 - Ruff can manage the synthetic Python document through ordinary Eglot.
 - The R `languageserver` can manage an ESS shadow buffer through ordinary
   Eglot.
 - Julia `LanguageServer` can manage a `julia-mode` shadow buffer through
   ordinary Eglot.
+- TypeScript Language Server can provide completion, diagnostics, xrefs,
+  rename, and formatting through a translated OJS shadow.
 - Ruff diagnostics retain the same positions and can be reported by Flymake in
   the `.qmd` source buffer.
 - The Python runner starts an inferior process, waits for initialization, and
@@ -105,6 +121,8 @@ Eglot integration.
 - ESS, inferior Python, and `julia-repl` adapters all execute live code and
   return the expected result.
 - Standalone preview starts, reports a browser URL, and shuts down cleanly.
+- OJS runner dispatch starts or updates that preview instead of evaluating
+  reactive cells in Node.
 - A live Quarto render produces the expected HTML output.
 
 ## Development order
@@ -124,6 +142,7 @@ Eglot integration.
     shortcode authoring commands.~~
 13. ~~Map rename, formatting, and code-action edits back to Quarto source.~~
 14. ~~Integrate into Doom while retaining `poly-quarto-mode` as a fallback.~~
+15. ~~Add mapped TypeScript tooling and Quarto-native execution for OJS.~~
 
 ## Initial non-goals
 

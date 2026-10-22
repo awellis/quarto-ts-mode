@@ -1,0 +1,44 @@
+---
+title: "Observable fixture"
+format: html
+---
+
+```{ojs}
+//| label: fig-controls
+viewof threshold = Inputs.range([0, 10], {value: 5})
+```
+
+```{ojs}
+data = [{value: 2}, {value: 8}]
+```
+
+```{ojs}
+filtered = {
+  const minimum = threshold;
+  return data.filter(d => d.value >= minimum);
+}
+```
+
+```{ojs}
+mutable count = 0
+```
+
+```{ojs}
+mutable count += 1
+```
+
+```{ojs}
+asyncData = await Promise.resolve(filtered)
+```
+
+```{ojs}
+sequence = yield* [1, 2, 3]
+```
+
+```{ojs}
+import {chart as remoteChart} from "@d3/bar-chart"
+```
+
+```{ojs}
+Plot.plot({marks: [Plot.dot(filtered, {x: "value"})]})
+```

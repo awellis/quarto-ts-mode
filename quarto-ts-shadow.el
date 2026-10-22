@@ -9,14 +9,16 @@
 ;;; Commentary:
 
 ;; Maintain persistent per-language buffers for a Quarto source buffer.  Each
-;; shadow buffer has the same length and line structure as its source.  Cell
-;; bodies for one language are copied verbatim and all other characters are
-;; replaced by spaces.  Source and shadow positions are therefore identical.
+;; shadow buffer normally has the same length and line structure as its source.
+;; Cell bodies for one language are copied and all other source characters are
+;; blanked.  Observable JavaScript is translated to valid JavaScript with an
+;; explicit bidirectional position map.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'quarto-ts-cell)
+(require 'quarto-ts-ojs)
 (require 'subr-x)
 
 (defgroup quarto-ts-shadow nil
@@ -59,12 +61,54 @@
 (defvar-local quarto-ts-shadow-language nil
   "Embedded language represented by the current shadow buffer.")
 
+(defvar-local quarto-ts-shadow-position-map nil
+  "Position map for a transformed shadow buffer, or nil for identity mapping.")
+
+(cl-defstruct (quarto-ts-shadow-edit
+               (:constructor quarto-ts-shadow-edit-create))
+  "One replacement relating source and transformed shadow positions."
+  source-beg source-end shadow-beg shadow-end)
+
+(cl-defstruct (quarto-ts-shadow-map
+               (:constructor quarto-ts-shadow-map-create))
+  "Bidirectional position mapping for a transformed shadow buffer."
+  edits source-max shadow-source-max)
+
 (defun quarto-ts-shadow--blank-source (source)
   "Replace every non-newline character in SOURCE with a space."
   (replace-regexp-in-string "[^\n]" " " source t t))
 
+(defun quarto-ts-shadow--apply-edits (contents edits)
+  "Apply source-coordinate EDITS to CONTENTS and return text plus a map."
+  (let ((source-cursor 1)
+        (shadow-cursor 1)
+        (source-max (1+ (length contents)))
+        parts mapped-edits)
+    (dolist (edit edits)
+      (pcase-let ((`(,beg ,end ,replacement) edit))
+        (unless (and (<= source-cursor beg) (<= beg end source-max))
+          (error "Invalid or overlapping Quarto shadow edit: %S" edit))
+        (let* ((unchanged (substring contents (1- source-cursor) (1- beg)))
+               (shadow-beg (+ shadow-cursor (length unchanged)))
+               (shadow-end (+ shadow-beg (length replacement))))
+          (push unchanged parts)
+          (push replacement parts)
+          (push (quarto-ts-shadow-edit-create
+                 :source-beg beg :source-end end
+                 :shadow-beg shadow-beg :shadow-end shadow-end)
+                mapped-edits)
+          (setq source-cursor end
+                shadow-cursor shadow-end))))
+    (push (substring contents (1- source-cursor)) parts)
+    (let ((result (apply #'concat (nreverse parts))))
+      (cons result
+            (quarto-ts-shadow-map-create
+             :edits (nreverse mapped-edits)
+             :source-max source-max
+             :shadow-source-max (1+ (length result)))))))
+
 (defun quarto-ts-shadow--contents (language)
-  "Return shadow-buffer contents for LANGUAGE in the current source buffer."
+  "Return a plist containing shadow contents and position map for LANGUAGE."
   (let ((source (buffer-substring-no-properties (point-min) (point-max)))
         (cells (quarto-ts-cell-list)))
     (with-temp-buffer
@@ -76,7 +120,67 @@
             (goto-char beg)
             (delete-region beg end)
             (insert (substring source (1- beg) (1- end))))))
-      (buffer-string))))
+      (let ((contents (buffer-string)))
+        (if (eq language 'ojs)
+            (let* ((spec (quarto-ts-ojs-shadow-spec source cells))
+                   (translated
+                    (quarto-ts-shadow--apply-edits
+                     contents (plist-get spec :edits))))
+              (list :contents (concat (car translated)
+                                      (plist-get spec :appendix))
+                    :map (cdr translated)))
+          (list :contents contents :map nil))))))
+
+(defun quarto-ts-shadow-source-to-shadow-position (shadow position)
+  "Map source POSITION into SHADOW buffer coordinates."
+  (with-current-buffer shadow
+    (if (not quarto-ts-shadow-position-map)
+        position
+      (let ((map quarto-ts-shadow-position-map)
+            (delta 0))
+        (catch 'mapped
+          (dolist (edit (quarto-ts-shadow-map-edits map))
+            (let ((source-beg (quarto-ts-shadow-edit-source-beg edit))
+                  (source-end (quarto-ts-shadow-edit-source-end edit))
+                  (shadow-beg (quarto-ts-shadow-edit-shadow-beg edit))
+                  (shadow-end (quarto-ts-shadow-edit-shadow-end edit)))
+              (cond
+               ((< position source-beg)
+                (throw 'mapped (+ position delta)))
+               ((and (< source-beg source-end) (< position source-end))
+                (throw 'mapped
+                       (+ shadow-beg
+                          (min (- position source-beg)
+                               (- shadow-end shadow-beg))))))
+              (setq delta (- shadow-end source-end))))
+          (min (+ position delta)
+               (quarto-ts-shadow-map-shadow-source-max map)))))))
+
+(defun quarto-ts-shadow-shadow-to-source-position (shadow position)
+  "Map POSITION in SHADOW back into source-buffer coordinates."
+  (with-current-buffer shadow
+    (if (not quarto-ts-shadow-position-map)
+        position
+      (let ((map quarto-ts-shadow-position-map)
+            (delta 0))
+        (if (>= position (quarto-ts-shadow-map-shadow-source-max map))
+            (quarto-ts-shadow-map-source-max map)
+          (catch 'mapped
+            (dolist (edit (quarto-ts-shadow-map-edits map))
+              (let ((source-beg (quarto-ts-shadow-edit-source-beg edit))
+                    (source-end (quarto-ts-shadow-edit-source-end edit))
+                    (shadow-beg (quarto-ts-shadow-edit-shadow-beg edit))
+                    (shadow-end (quarto-ts-shadow-edit-shadow-end edit)))
+                (cond
+                 ((< position shadow-beg)
+                  (throw 'mapped (- position delta)))
+                 ((< position shadow-end)
+                  (throw 'mapped
+                         (+ source-beg
+                            (min (- position shadow-beg)
+                                 (- source-end source-beg))))))
+                (setq delta (- shadow-end source-end))))
+            (- position delta)))))))
 
 (defun quarto-ts-shadow--buffer-name (language)
   "Return the shadow-buffer name for LANGUAGE and the current source."
@@ -145,8 +249,11 @@ When LANGUAGE is non-nil, synchronize only that language."
       (pcase-let ((`(,entry-language . ,buffer) entry))
         (when (and (buffer-live-p buffer)
                    (or (null language) (eq language entry-language)))
-          (let ((contents (quarto-ts-shadow--contents entry-language)))
+          (let* ((spec (quarto-ts-shadow--contents entry-language))
+                 (contents (plist-get spec :contents))
+                 (position-map (plist-get spec :map)))
             (with-current-buffer buffer
+              (setq quarto-ts-shadow-position-map position-map)
               (unless (equal contents
                              (buffer-substring-no-properties
                               (point-min) (point-max)))

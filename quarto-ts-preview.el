@@ -269,11 +269,28 @@ and `:project'."
       (browse-url url)
     (user-error "The Quarto preview URL is not available yet")))
 
+(defun quarto-ts-preview-live-p ()
+  "Return non-nil when the current file has a live preview process."
+  (when-let* ((session (quarto-ts-preview--session))
+              (process (quarto-ts-preview-session-process session)))
+    (process-live-p process)))
+
+(defun quarto-ts-preview-update ()
+  "Save the document so its Quarto preview runtime reevaluates it.
+Start a preview session when the current file has no live session."
+  (interactive)
+  (if (quarto-ts-preview-live-p)
+      (progn
+        (quarto-ts-preview--save-source)
+        (message "Updated Quarto preview runtime")
+        (quarto-ts-preview--session))
+    (quarto-ts-preview-start)))
+
 (defun quarto-ts-preview-refresh ()
   "Save the current document and reopen its preview URL.
 Quarto's file watcher performs the actual re-render."
   (interactive)
-  (quarto-ts-preview--save-source)
+  (quarto-ts-preview-update)
   (quarto-ts-preview-browse))
 
 (defun quarto-ts-preview-show-log ()

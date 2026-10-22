@@ -135,6 +135,90 @@
           (quarto-ts-shadow-kill-all))
         (kill-buffer source)))))
 
+(ert-deftest quarto-ts-eglot-supports-ojs-through-typescript-language-server ()
+  (skip-unless (executable-find "typescript-language-server"))
+  (let* ((fixture
+          (expand-file-name "fixtures/ojs.qmd"
+                            quarto-ts-eglot-integration-test-directory))
+         (source (find-file-noselect fixture))
+         shadow
+         server
+         reported)
+    (unwind-protect
+        (with-current-buffer source
+          (quarto-ts-mode)
+          (goto-char (point-max))
+          (insert "\n```{ojs}\nbroken = unknownOjsName + 1\n```\n")
+          (goto-char (point-min))
+          (search-forward "viewof threshold")
+          (setq shadow (quarto-ts-shadow-buffer 'ojs))
+          (quarto-ts-eglot-ensure 'ojs)
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline) (null server))
+              (accept-process-output nil 0.2)
+              (setq server
+                    (with-current-buffer shadow (eglot-current-server)))))
+          (should server)
+          (should (jsonrpc-running-p server))
+          (goto-char (point-min))
+          (search-forward "Promise.")
+          (let ((completion (quarto-ts-eglot-completion-at-point)))
+            (should completion)
+            (should (functionp (nth 2 completion))))
+          (quarto-ts-eglot-flymake-backend
+           (lambda (diagnostics &rest _)
+             (when diagnostics
+               (setq reported diagnostics))))
+          (let ((deadline (+ (float-time) 15)))
+            (while
+                (and (< (float-time) deadline)
+                     (not
+                      (cl-find-if
+                       (lambda (diagnostic)
+                         (string-match-p
+                          "unknownOjsName"
+                          (flymake-diagnostic-text diagnostic)))
+                       reported)))
+              (accept-process-output nil 0.2)))
+          (let ((invalid
+                 (cl-find-if
+                  (lambda (diagnostic)
+                    (string-match-p
+                     "unknownOjsName"
+                     (flymake-diagnostic-text diagnostic)))
+                  reported)))
+            (should invalid)
+            (should (eq (flymake-diagnostic-buffer invalid) source)))
+          (goto-char (point-min))
+          (search-forward "viewof threshold")
+          (let ((eglot-confirm-server-edits nil))
+            (quarto-ts-eglot-rename "cutoff"))
+          (should (string-match-p "viewof cutoff" (buffer-string)))
+          (should (string-match-p "const minimum = cutoff" (buffer-string)))
+          (should-not (string-match-p "viewof threshold" (buffer-string)))
+          (goto-char (point-min))
+          (search-forward "viewof cutoff")
+          (let ((references
+                 (xref-backend-references 'quarto-ts-eglot "cutoff")))
+            (should (>= (length references) 2))
+            (dolist (reference references)
+              (should
+               (equal (file-truename
+                       (xref-file-location-file
+                        (xref-item-location reference)))
+                      (file-truename fixture)))))
+          (goto-char (point-min))
+          (search-forward "data = [{value")
+          (quarto-ts-eglot-format-cell)
+          (should (string-match-p "data = \\[" (buffer-string))))
+      (when server
+        (ignore-errors (eglot-shutdown server)))
+      (when (buffer-live-p source)
+        (with-current-buffer source
+          (set-buffer-modified-p nil)
+          (quarto-ts-shadow-kill-all))
+        (kill-buffer source)))))
+
 (ert-deftest quarto-ts-runner-sends-code-to-python-process ()
   (skip-unless (executable-find "python3"))
   (let ((python-shell-interpreter (executable-find "python3"))
@@ -221,6 +305,48 @@
           (should (process-live-p process))
           (should (string-prefix-p
                    "http" (quarto-ts-preview-session-url session)))
+          (with-current-buffer buffer
+            (quarto-ts-preview-stop)))
+      (when (process-live-p process)
+        (delete-process process))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer))
+      (remhash (file-truename file) quarto-ts-preview--sessions)
+      (delete-directory directory t))))
+
+(ert-deftest quarto-ts-runner-starts-quarto-runtime-for-ojs ()
+  (skip-unless (executable-find "quarto"))
+  (let* ((directory (make-temp-file "quarto-ts-ojs-preview-" t))
+         (file (expand-file-name "observable.qmd" directory))
+         buffer
+         session
+         process)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert (concat "---\ntitle: OJS runtime\nformat: html\n---\n\n"
+                            "```{ojs}\nvalue = 1\n```\n")))
+          (setq buffer (find-file-noselect file))
+          (with-current-buffer buffer
+            (goto-char (point-max))
+            (insert "\nOJS preview update\n")
+            (let ((quarto-ts-preview-auto-browse nil)
+                  (quarto-ts-preview-display-buffer nil)
+                  (quarto-ts-preview-arguments '("--no-browser")))
+              (quarto-ts-runner-ojs-send nil nil)
+              (setq session (quarto-ts-preview--session)
+                    process (quarto-ts-preview-session-process session))))
+          (let ((deadline (+ (float-time) 30)))
+            (while (and (< (float-time) deadline)
+                        (process-live-p process)
+                        (null (quarto-ts-preview-session-url session)))
+              (accept-process-output process 0.2)))
+          (should (process-live-p process))
+          (should (string-prefix-p
+                   "http" (quarto-ts-preview-session-url session)))
+          (should (with-temp-buffer
+                    (insert-file-contents file)
+                    (string-match-p "OJS preview update" (buffer-string))))
           (with-current-buffer buffer
             (quarto-ts-preview-stop)))
       (when (process-live-p process)

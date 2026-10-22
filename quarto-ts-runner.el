@@ -10,12 +10,14 @@
 
 ;; Language-neutral cell execution for `quarto-ts-mode'.  This module locates
 ;; cells and delegates code strings to optional ESS, Python, and Julia REPL
-;; adapters.  It does not implement or replace those REPLs.
+;; adapters.  Observable JavaScript runs in Quarto's reactive browser preview
+;; rather than being incorrectly evaluated as standalone JavaScript.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'quarto-ts-cell)
+(require 'quarto-ts-preview)
 (require 'subr-x)
 
 (declare-function ess-force-buffer-current "ess-inf")
@@ -39,7 +41,8 @@
 (defcustom quarto-ts-runner-backends
   '((r . quarto-ts-runner-ess-send)
     (python . quarto-ts-runner-python-send)
-    (julia . quarto-ts-runner-julia-send))
+    (julia . quarto-ts-runner-julia-send)
+    (ojs . quarto-ts-runner-ojs-send))
   "Alist mapping cell languages to code-sending functions.
 Each function receives CODE and the corresponding `quarto-ts-cell' object."
   :type '(alist :key-type symbol :value-type function)
@@ -48,7 +51,8 @@ Each function receives CODE and the corresponding `quarto-ts-cell' object."
 (defcustom quarto-ts-runner-open-functions
   '((r . quarto-ts-runner-ess-open)
     (python . quarto-ts-runner-python-open)
-    (julia . quarto-ts-runner-julia-open))
+    (julia . quarto-ts-runner-julia-open)
+    (ojs . quarto-ts-runner-ojs-open))
   "Alist mapping cell languages to functions that display their REPL."
   :type '(alist :key-type symbol :value-type function)
   :group 'quarto-ts-runner)
@@ -255,6 +259,19 @@ When BEG and END are non-nil, send only their intersection with CELL."
   "Display the Julia REPL used by the current Quarto document."
   (quarto-ts-runner--require-julia-repl)
   (julia-repl))
+
+(defun quarto-ts-runner-ojs-send (_code _cell)
+  "Reevaluate OJS through the current document's Quarto preview runtime."
+  (quarto-ts-preview-update)
+  (message "Reevaluating the Quarto OJS reactive graph"))
+
+(defun quarto-ts-runner-ojs-open ()
+  "Open or start the Quarto browser runtime used for OJS."
+  (if (quarto-ts-preview-live-p)
+      (condition-case nil
+          (quarto-ts-preview-browse)
+        (user-error (quarto-ts-preview-show-log)))
+    (quarto-ts-preview-start)))
 
 (provide 'quarto-ts-runner)
 ;;; quarto-ts-runner.el ends here

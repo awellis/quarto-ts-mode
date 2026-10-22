@@ -37,22 +37,29 @@ The current package provides:
   `@fig-...`, `@tbl-...`, and `@sec-...`.
 - Citar citation completion and insertion when Citar is installed.
 - Callout and shortcode insertion commands.
-- Persistent, position-preserving shadow buffers for each language.
-- Ordinary Eglot sessions attached to language shadow buffers.
+- Persistent shadow buffers for each language, with explicit bidirectional
+  source maps when generated text changes positions.
+- OJS-to-JavaScript translation for reactive names, `viewof`, `mutable`,
+  imports, block cells, `await`, and `yield`.
+- Ordinary Eglot sessions attached to language shadow buffers, including
+  TypeScript Language Server for translated OJS.
 - Flymake diagnostics mapped back into the `.qmd` source buffer.
 - Completion, hover, and signature-help forwarding.
 - Completion text edits copied back from executable cell bodies.
 - Definitions and references remapped from synthetic files to `.qmd` files.
 - Rename, cell formatting, and code-action edits mapped safely back from
-  language shadow buffers.
+  language shadow buffers; OJS rename and formatting discard generated-only
+  edits through source maps.
 - Cell, line, region, cells-above, and all-cells execution commands.
 - Optional ESS, inferior Python, and `julia-repl` runner adapters.
+- Quarto-native OJS execution that saves or starts the browser preview so
+  Quarto reevaluates the complete reactive dependency graph.
 - Respect for Quarto's `eval: false` cell option.
 - Independent preview sessions for projects and standalone documents.
 - Preview URL detection, browsing, refresh, logs, and clean process shutdown.
 - Asynchronous document/project rendering with optional output formats.
-- Unit tests plus live Ruff, R and Julia language servers, ESS, Python and
-  Julia runners, preview, and render integration tests.
+- Unit tests plus live Ruff, R, Julia, and TypeScript language servers; ESS,
+  Python, Julia, and OJS runners; preview; and render integration tests.
 
 Edits outside executable cell bodies are intentionally discarded when mapping
 language-server changes back to a document. Interactive snippet fields are not
@@ -66,7 +73,8 @@ yet preserved.
 - Language grammars and major modes for the embedded languages you use
 - Optional: Citar for citations; `yaml-language-server` for project validation;
   ESS and R `languageserver` for R; `julia-repl`, `julia-mode`, and Julia
-  `LanguageServer` for Julia; and an inferior Python process
+  `LanguageServer` for Julia; an inferior Python process; and
+  `typescript-language-server` plus TypeScript's `tsserver` for OJS
 
 Install Markdown parsers interactively with:
 

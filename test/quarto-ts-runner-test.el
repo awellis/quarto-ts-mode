@@ -67,6 +67,21 @@
           (should (= (quarto-ts-runner-run-all-cells) 2))))
       (should (equal (nreverse languages) '(python julia))))))
 
+(ert-deftest quarto-ts-runner-runs-ojs-in-quarto-preview-runtime ()
+  (with-temp-buffer
+    (setq buffer-file-name
+          (expand-file-name "ojs-runner.qmd" temporary-file-directory))
+    (insert-file-contents
+     (expand-file-name "fixtures/ojs.qmd" quarto-ts-runner-test-directory))
+    (markdown-ts-mode)
+    (goto-char (point-min))
+    (search-forward "viewof threshold")
+    (let (updated)
+      (cl-letf (((symbol-function 'quarto-ts-preview-update)
+                 (lambda () (setq updated t))))
+        (quarto-ts-runner-run-cell))
+      (should updated))))
+
 (ert-deftest quarto-ts-runner-restricts-region-to-cell-body ()
   (quarto-ts-runner-test-with-fixture
     (goto-char (point-min))
