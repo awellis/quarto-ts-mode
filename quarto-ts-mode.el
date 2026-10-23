@@ -16,6 +16,7 @@
 
 ;;; Code:
 
+(require 'easymenu)
 (require 'markdown-ts-mode)
 (require 'quarto-ts-cell)
 
@@ -163,6 +164,62 @@ The underlying text is unchanged and delimiters can be revealed with
 ;; to the tree-sitter presentation implementation in Quarto buffers.
 (define-key quarto-ts-mode-map [remap markdown-toggle-markup-hiding]
             #'quarto-ts-toggle-hide-markup)
+
+(easy-menu-define quarto-ts-menu quarto-ts-mode-map
+  "Menu for editing and running Quarto documents."
+  '("Quarto"
+    ("Execute"
+     ["Run Selection" quarto-ts-runner-run-region :active (use-region-p)]
+     ["Run Line" quarto-ts-runner-run-line]
+     ["Run Cell" quarto-ts-runner-run-cell]
+     ["Run Cell and Advance" quarto-ts-runner-run-cell-and-next]
+     "---"
+     ["Run Cells Above" quarto-ts-runner-run-cells-above]
+     ["Run All Cells" quarto-ts-runner-run-all-cells]
+     "---"
+     ["Open REPL" quarto-ts-runner-open-repl])
+    ("Cells"
+     ["Next Cell" quarto-ts-cell-next]
+     ["Previous Cell" quarto-ts-cell-previous]
+     ["Mark Cell" quarto-ts-cell-mark]
+     "---"
+     ["Toggle Cell Fold" quarto-ts-cell-toggle-fold]
+     ["Fold All Cells" quarto-ts-cell-fold-all]
+     ["Unfold All Cells" quarto-ts-cell-unfold-all])
+    ("Embedded Language"
+     ["Start Language Server" quarto-ts-eglot-ensure]
+     ["Open Language Shadow" quarto-ts-shadow-open]
+     "---"
+     ["Rename Symbol" quarto-ts-eglot-rename]
+     ["Format Cell" quarto-ts-eglot-format-cell]
+     ["Code Actions" quarto-ts-eglot-code-actions])
+    ("Document Language"
+     ["Start Panache" quarto-ts-panache-ensure]
+     ["Reconnect Panache" quarto-ts-panache-reconnect]
+     "---"
+     ["Format Document" quarto-ts-panache-format-buffer]
+     ["Code Actions" quarto-ts-panache-code-actions])
+    ("Authoring"
+     ["Insert Citation" quarto-ts-insert-citation]
+     ["Insert Callout" quarto-ts-insert-callout]
+     ["Insert Shortcode" quarto-ts-insert-shortcode]
+     "---"
+     ["Describe YAML Option" quarto-ts-yaml-describe-option])
+    ("Preview and Render"
+     ["Start Preview" quarto-ts-preview-start]
+     ["Stop Preview" quarto-ts-preview-stop
+      :active (quarto-ts-preview-live-p)]
+     ["Open Preview" quarto-ts-preview-browse
+      :active (quarto-ts-preview-live-p)]
+     ["Refresh Preview" quarto-ts-preview-refresh
+      :active (quarto-ts-preview-live-p)]
+     ["Show Preview Log" quarto-ts-preview-show-log]
+     "---"
+     ["Render Document" quarto-ts-render]
+     ["Render Document To..." quarto-ts-render-to]
+     ["Render Project" quarto-ts-render-project])
+    "---"
+    ["Toggle Markup Visibility" quarto-ts-toggle-hide-markup]))
 
 ;;;###autoload
 (define-derived-mode quarto-ts-mode markdown-ts-mode "Quarto"

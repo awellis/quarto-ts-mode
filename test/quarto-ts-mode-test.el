@@ -25,6 +25,19 @@
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q w f")
               #'quarto-ts-panache-format-buffer)))
 
+(ert-deftest quarto-ts-mode-defines-quarto-menu ()
+  (let* ((menu-bar (lookup-key quarto-ts-mode-map [menu-bar]))
+         (menu (easy-menu-lookup-name menu-bar "Quarto"))
+         (execute (easy-menu-lookup-name menu "Execute"))
+         (preview (easy-menu-lookup-name menu "Preview and Render")))
+    (should (keymapp menu))
+    (should (keymapp execute))
+    (should (eq (easy-menu-lookup-name execute "Run Cell")
+                #'quarto-ts-runner-run-cell))
+    (should (keymapp preview))
+    (should (eq (easy-menu-lookup-name preview "Render Document")
+                #'quarto-ts-render))))
+
 (ert-deftest quarto-ts-mode-adds-cells-to-imenu ()
   (with-temp-buffer
     (setq buffer-file-name
