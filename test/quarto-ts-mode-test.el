@@ -25,6 +25,32 @@
   (should (eq (keymap-lookup quarto-ts-mode-map "C-c C-q w f")
               #'quarto-ts-panache-format-buffer)))
 
+(ert-deftest quarto-ts-mode-uses-contextual-comment-syntax ()
+  (with-temp-buffer
+    (insert "---\ntitle: Test\n---\n\nBody\n")
+    (quarto-ts-mode)
+    (goto-char (point-min))
+    (forward-line 1)
+    (let ((begin (line-beginning-position)))
+      (comment-or-uncomment-region begin (line-end-position))
+      (should (equal (buffer-substring-no-properties
+                      begin (line-end-position))
+                     "# title: Test"))
+      (comment-or-uncomment-region begin (line-end-position))
+      (should (equal (buffer-substring-no-properties
+                      begin (line-end-position))
+                     "title: Test")))
+    (forward-line 3)
+    (let ((begin (line-beginning-position)))
+      (comment-or-uncomment-region begin (line-end-position))
+      (should (equal (buffer-substring-no-properties
+                      begin (line-end-position))
+                     "<!-- Body -->"))
+      (comment-or-uncomment-region begin (line-end-position))
+      (should (equal (buffer-substring-no-properties
+                      begin (line-end-position))
+                     "Body")))))
+
 (ert-deftest quarto-ts-mode-defines-quarto-menu ()
   (let* ((menu-bar (lookup-key quarto-ts-mode-map [menu-bar]))
          (menu (easy-menu-lookup-name menu-bar "Quarto"))

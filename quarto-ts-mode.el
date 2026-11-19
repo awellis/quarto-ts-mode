@@ -221,11 +221,27 @@ The underlying text is unchanged and delimiters can be revealed with
     "---"
     ["Toggle Markup Visibility" quarto-ts-toggle-hide-markup]))
 
+(defun quarto-ts--comment-setup ()
+  "Select the comment syntax appropriate at point."
+  (if (quarto-ts-yaml--region)
+      (setq-local comment-start "# "
+                  comment-end ""
+                  comment-start-skip "#+[ \t]*"
+                  comment-end-skip nil
+                  comment-continue "# "
+                  comment-use-syntax nil)
+    (setq-local comment-start "<!-- "
+                comment-end " -->"
+                comment-start-skip "<!--[ \t]*"
+                comment-end-skip "[ \t]*-->"
+                comment-continue nil
+                comment-use-syntax nil)))
+
 ;;;###autoload
 (define-derived-mode quarto-ts-mode markdown-ts-mode "Quarto"
   "Major mode for editing Quarto Markdown documents."
-  (setq-local comment-start "<!-- "
-              comment-end " -->")
+  (setq-local comment-setup-function #'quarto-ts--comment-setup)
+  (quarto-ts--comment-setup)
   (quarto-ts--install-code-block-modes)
   (setq-local markdown-ts-hide-markup quarto-ts-hide-markup)
   (quarto-ts-font-lock-setup quarto-ts-code-block-modes)
